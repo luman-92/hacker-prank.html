@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Terminal</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #0f0;
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            padding: 20px;
+            overflow: hidden;
+            height: 100vh;
+        }
+        #terminal {
+            font-size: 1.2rem;
+            line-height: 1.5;
+        }
+        .cursor {
+            animation: blink 1s infinite;
+        }
+        @keyframes blink { 50% { opacity: 0; } }
+    </style>
+</head>
+<body>
+    <div id="terminal">
+        <p>INITIALIZING SYSTEM SEQUENCE...</p>
+        <p id="output"></p>
+        <span class="cursor">_</span>
+    </div>
+
+    <script>
+        const output = document.getElementById('output');
+        const commands = [
+            "ACCESSING ROOT DIRECTORY...",
+            "BYPASSING FIREWALLS...",
+            "ESTABLISHING SECURE CONNECTION...",
+            "SYSTEM ANALYSIS COMPLETE.",
+            "SIMULATION INTERFACE ACTIVE."
+        ];
+        
+        let i = 0;
+        function typeCommands() {
+            if (i < commands.length) {
+                output.innerHTML += commands[i] + "<br>";
+                i++;
+                setTimeout(typeCommands, 1500);
+            }
+        }
+        typeCommands();
+    </script>
+</body>
+</html>
